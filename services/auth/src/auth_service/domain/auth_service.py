@@ -14,7 +14,7 @@ class AuthService:
         self.access_ttl = access_ttl
         self.refresh_ttl = refresh_ttl
 
-    def register(self, payload: RegisterRequest) -> UserResponse:
+    def register(self, payload: RegisterRequest) -> LoginResponse:
         email = payload.email.lower()
         if self.repo.get_user(email):
             raise ValueError("USER_ALREADY_EXISTS")
@@ -27,12 +27,34 @@ class AuthService:
             password_hash=password_hash,
         )
         self.repo.put_user(user)
-        return UserResponse(
-            email=user.email,
-            full_name=user.full_name,
+        
+        # Generar tokens automáticamente después del registro
+        access_token = jwt_utils.sign_token(
+            subject=user.email,
             role=user.role,
-            status=user.status,
-            last_login_at=user.last_login_at,
+            ttl_seconds=self.access_ttl,
+            token_type="access",
+        )
+        refresh_token = jwt_utils.sign_token(
+            subject=user.email,
+            role=user.role,
+            ttl_seconds=self.refresh_ttl,
+            token_type="refresh",
+        )
+        
+        return LoginResponse(
+            user=UserResponse(
+                email=user.email,
+                full_name=user.full_name,
+                role=user.role,
+                status=user.status,
+                last_login_at=user.last_login_at,
+            ),
+            tokens=AuthTokens(
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_in=self.access_ttl,
+            ),
         )
 
     def login(self, payload: LoginRequest) -> LoginResponse:
