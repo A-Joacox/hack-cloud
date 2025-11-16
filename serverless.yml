@@ -27,6 +27,12 @@ functions:
   # ==================== AUTH ====================
   authHandler:
     handler: services/auth/src/auth_service/app.lambda_handler
+    module: services/auth
+    package:
+      patterns:
+        - 'services/auth/**'
+        - '!services/incidents/**'
+        - '!services/realtime/**'
     events:
       - http:
           path: /auth/register
@@ -39,10 +45,22 @@ functions:
   
   authAuthorizer:
     handler: services/auth/src/auth_service/app.authorizer_handler
+    module: services/auth
+    package:
+      patterns:
+        - 'services/auth/**'
+        - '!services/incidents/**'
+        - '!services/realtime/**'
   
   # ==================== INCIDENTS ====================
   createIncident:
     handler: services/incidents/src/handlers.create_incident
+    module: services/incidents
+    package:
+      patterns:
+        - 'services/incidents/**'
+        - '!services/auth/**'
+        - '!services/realtime/**'
     events:
       - http:
           path: /incidents
@@ -55,6 +73,12 @@ functions:
   
   updateIncident:
     handler: services/incidents/src/handlers.update_incident
+    module: services/incidents
+    package:
+      patterns:
+        - 'services/incidents/**'
+        - '!services/auth/**'
+        - '!services/realtime/**'
     events:
       - http:
           path: /incidents/{id}
@@ -67,6 +91,12 @@ functions:
   
   listIncidents:
     handler: services/incidents/src/handlers.list_incidents
+    module: services/incidents
+    package:
+      patterns:
+        - 'services/incidents/**'
+        - '!services/auth/**'
+        - '!services/realtime/**'
     events:
       - http:
           path: /incidents
@@ -80,12 +110,24 @@ functions:
   # ==================== WEBSOCKET ====================
   wsConnect:
     handler: services/realtime/src/connection_manager.on_connect
+    module: services/realtime
+    package:
+      patterns:
+        - 'services/realtime/**'
+        - '!services/auth/**'
+        - '!services/incidents/**'
     events:
       - websocket:
           route: $connect
   
   wsDisconnect:
     handler: services/realtime/src/connection_manager.on_disconnect
+    module: services/realtime
+    package:
+      patterns:
+        - 'services/realtime/**'
+        - '!services/auth/**'
+        - '!services/incidents/**'
     events:
       - websocket:
           route: $disconnect
@@ -93,6 +135,12 @@ functions:
   # ==================== STREAMS CONSUMERS ====================
   broadcaster:
     handler: services/realtime/src/broadcaster.handler
+    module: services/realtime
+    package:
+      patterns:
+        - 'services/realtime/**'
+        - '!services/auth/**'
+        - '!services/incidents/**'
     events:
       - stream:
           type: dynamodb
@@ -103,6 +151,12 @@ functions:
   
   notifier:
     handler: services/realtime/src/notifier.handler
+    module: services/realtime
+    package:
+      patterns:
+        - 'services/realtime/**'
+        - '!services/auth/**'
+        - '!services/incidents/**'
     events:
       - stream:
           type: dynamodb
@@ -201,7 +255,12 @@ resources:
 
 custom:
   pythonRequirements:
-    dockerizePip: true
+    dockerizePip: false
     slim: true
     strip: false
     layer: false
+    # Especificar requirements por función
+    fileName: requirements.txt
+    usePoetry: false
+    useDownloadCache: true
+    useStaticCache: true
