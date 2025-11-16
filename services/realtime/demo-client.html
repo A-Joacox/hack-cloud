@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlertaUTEC WebSocket Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+        .connection-panel {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e1e4e8;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-right: 10px;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        .btn-danger:hover { background: #c0392b; }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .status {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .events-panel {
+            margin-top: 25px;
+        }
+        .events-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        h2 {
+            color: #333;
+            font-size: 18px;
+        }
+        .clear-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: #6c757d;
+            color: white;
+        }
+        .events-container {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .event {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #667eea;
+            background: #2d2d2d;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        .event-type {
+            color: #4ec9b0;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .event-data {
+            color: #dcdcaa;
+        }
+        .event-time {
+            color: #858585;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+        .empty-state {
+            color: #858585;
+            text-align: center;
+            padding: 40px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚨 AlertaUTEC WebSocket Demo</h1>
+        <p class="subtitle">Prueba de conexión en tiempo real para incidentes del campus</p>
+
+        <div class="connection-panel">
+            <div class="input-group">
+                <label>WebSocket URL (WSS Endpoint)</label>
+                <input type="text" id="wsUrl" placeholder="wss://xxxxxxxx.execute-api.us-east-1.amazonaws.com/prod">
+            </div>
+            <div class="input-group">
+                <label>User ID (opcional)</label>
+                <input type="text" id="userId" placeholder="user123" value="demo-user">
+            </div>
+            <div class="input-group">
+                <label>Role (opcional)</label>
+                <input type="text" id="userRole" placeholder="student, admin, authority" value="student">
+            </div>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button class="btn btn-primary" id="connectBtn" onclick="connect()">Conectar</button>
+                <button class="btn btn-danger" id="disconnectBtn" onclick="disconnect()" disabled>Desconectar</button>
+                <span id="status" class="status disconnected">● Desconectado</span>
+            </div>
+        </div>
+
+        <div class="events-panel">
+            <div class="events-header">
+                <h2>📡 Eventos en Tiempo Real</h2>
+                <button class="btn clear-btn" onclick="clearEvents()">Limpiar</button>
+            </div>
+            <div class="events-container" id="eventsContainer">
+                <div class="empty-state">Esperando eventos... Conecta al WebSocket para empezar.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+
+        function updateStatus(text, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = '● ' + text;
+            statusEl.className = 'status ' + className;
+        }
+
+        function addEvent(type, data) {
+            const container = document.getElementById('eventsContainer');
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            const eventEl = document.createElement('div');
+            eventEl.className = 'event';
+            eventEl.innerHTML = `
+                <div class="event-type">${type}</div>
+                <div class="event-data">${JSON.stringify(data, null, 2)}</div>
+                <div class="event-time">${new Date().toLocaleTimeString()}</div>
+            `;
+            container.insertBefore(eventEl, container.firstChild);
+        }
+
+        function connect() {
+            const urlInput = document.getElementById('wsUrl');
+            const userId = document.getElementById('userId').value;
+            const role = document.getElementById('userRole').value;
+
+            let wsUrl = urlInput.value.trim();
+            if (!wsUrl) {
+                alert('Por favor ingresa el WebSocket URL');
+                return;
+            }
+
+            // Agregar query params si se proporcionaron
+            if (userId || role) {
+                const params = new URLSearchParams();
+                if (userId) params.append('sub', userId);
+                if (role) params.append('role', role);
+                wsUrl += '?' + params.toString();
+            }
+
+            updateStatus('Conectando...', 'connecting');
+            document.getElementById('connectBtn').disabled = true;
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                updateStatus('Conectado', 'connected');
+                document.getElementById('disconnectBtn').disabled = false;
+                addEvent('CONNECTION', { status: 'connected', url: wsUrl });
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    addEvent(data.type || 'MESSAGE', data);
+                } catch (e) {
+                    addEvent('RAW_MESSAGE', { data: event.data });
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                addEvent('ERROR', { message: 'Error de conexión' });
+            };
+
+            ws.onclose = () => {
+                updateStatus('Desconectado', 'disconnected');
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                addEvent('CONNECTION', { status: 'disconnected' });
+                ws = null;
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function clearEvents() {
+            const container = document.getElementById('eventsContainer');
+            container.innerHTML = '<div class="empty-state">Eventos limpiados. Esperando nuevos eventos...</div>';
+        }
+
+        // Auto-cargar URL desde localStorage si existe
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedUrl = localStorage.getItem('wsUrl');
+            if (savedUrl) {
+                document.getElementById('wsUrl').value = savedUrl;
+            }
+        });
+
+        // Guardar URL en localStorage cuando cambie
+        document.getElementById('wsUrl').addEventListener('change', (e) => {
+            localStorage.setItem('wsUrl', e.target.value);
+        });
+    </script>
+</body>
+</html>

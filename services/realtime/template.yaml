@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AlertaUTEC Realtime (WebSocket + Streams + SNS)
+
+Parameters:
+  IncidentsStreamArn:
+    Type: String
+    Default: ''
+    Description: DynamoDB Stream ARN for the Incidents table (set after backend enables Streams)
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 15
+    MemorySize: 256
+
+Conditions:
+  HasIncidentsStream: !Not [ !Equals [ !Ref IncidentsStreamArn, '' ] ]
+
+Resources:
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAYPERREQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      TableName: !Sub ${AWS::StackName}-Connections
+
+  WebSocketApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub ${AWS::StackName}-ws
+      StageName: prod
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  ConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: connection_manager.on_connect
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+      Events:
+        ConnectRoute:
+          Type: Api
+          Properties:
+            ApiId: !Ref WebSocketApi
+            Route: $connect
+
+  DisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: connection_manager.on_disconnect
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+      Events:
+        DisconnectRoute:
+          Type: Api
+          Properties:
+            ApiId: !Ref WebSocketApi
+            Route: $disconnect
+
+  BroadcasterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: broadcaster.handler
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+          WS_CALLBACK_URL: !Sub https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Scan
+                - dynamodb:DeleteItem
+              Resource: !GetAtt ConnectionsTable.Arn
+            - Effect: Allow
+              Action:
+                - execute-api:ManageConnections
+              Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/prod/POST/@connections/*
+
+  BroadcasterEventMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Condition: HasIncidentsStream
+    Properties:
+      BatchSize: 10
+      Enabled: true
+      EventSourceArn: !Ref IncidentsStreamArn
+      FunctionName: !Ref BroadcasterFunction
+      StartingPosition: LATEST
+
+  IncidentAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${AWS::StackName}-IncidentAlerts
+
+  NotifierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: notifier.handler
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref IncidentAlertsTopic
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref IncidentAlertsTopic
+
+  NotifierEventMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Condition: HasIncidentsStream
+    Properties:
+      BatchSize: 10
+      Enabled: true
+      EventSourceArn: !Ref IncidentsStreamArn
+      FunctionName: !Ref NotifierFunction
+      StartingPosition: LATEST
+
+Outputs:
+  WebSocketWssEndpoint:
+    Description: WebSocket client endpoint (wss)
+    Value: !Sub wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+  WebSocketManagementUrl:
+    Description: Management HTTPS endpoint for post_to_connection
+    Value: !Sub https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+  ConnectionsTableName:
+    Description: DynamoDB table for WebSocket connections
+    Value: !Ref ConnectionsTable
+  IncidentAlertsTopicArn:
+    Description: SNS Topic for authority notifications
+    Value: !Ref IncidentAlertsTopic
