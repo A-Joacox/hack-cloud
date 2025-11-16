@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AlertaUTEC Realtime (WebSocket + Streams + SNS) - AWS Academy Version
+
+Parameters:
+  LabRoleArn:
+    Type: String
+    Default: 'arn:aws:iam::527785891672:role/LabRole'
+    Description: ARN of the LabRole (required for AWS Academy)
+  IncidentsStreamArn:
+    Type: String
+    Default: ''
+    Description: DynamoDB Stream ARN for the Incidents table
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 15
+    MemorySize: 256
+    Role: !Ref LabRoleArn
+
+Conditions:
+  HasIncidentsStream: !Not [ !Equals [ !Ref IncidentsStreamArn, '' ] ]
+
+Resources:
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub ${AWS::StackName}-ws
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  WebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref WebSocketApi
+      StageName: prod
+      AutoDeploy: true
+
+  ConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: connection_manager.on_connect
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+
+  ConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ConnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+
+  ConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConnectFunction.Arn}/invocations
+
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $connect
+      Target: !Sub integrations/${ConnectIntegration}
+
+  DisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: connection_manager.on_disconnect
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+
+  DisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+
+  DisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DisconnectFunction.Arn}/invocations
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $disconnect
+      Target: !Sub integrations/${DisconnectIntegration}
+
+  BroadcasterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: broadcaster.handler
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+          WS_CALLBACK_URL: !Sub https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+
+  BroadcasterEventMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Condition: HasIncidentsStream
+    Properties:
+      BatchSize: 10
+      Enabled: true
+      EventSourceArn: !Ref IncidentsStreamArn
+      FunctionName: !Ref BroadcasterFunction
+      StartingPosition: LATEST
+
+  IncidentAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: AlertaUTEC Incident Alerts
+
+  NotifierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: notifier.handler
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref IncidentAlertsTopic
+
+  NotifierEventMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Condition: HasIncidentsStream
+    Properties:
+      BatchSize: 10
+      Enabled: true
+      EventSourceArn: !Ref IncidentsStreamArn
+      FunctionName: !Ref NotifierFunction
+      StartingPosition: LATEST
+
+Outputs:
+  WebSocketWssEndpoint:
+    Description: WebSocket client endpoint (wss)
+    Value: !Sub wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+  WebSocketManagementUrl:
+    Description: Management HTTPS endpoint for post_to_connection
+    Value: !Sub https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+  ConnectionsTableName:
+    Description: DynamoDB table for WebSocket connections
+    Value: !Ref ConnectionsTable
+  IncidentAlertsTopicArn:
+    Description: SNS Topic for authority notifications
+    Value: !Ref IncidentAlertsTopic
+  WebSocketApiId:
+    Description: WebSocket API ID
+    Value: !Ref WebSocketApi
