@@ -21,7 +21,7 @@ Resources:
   ConnectionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      BillingMode: PAYPERREQUEST
+      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: pk
           AttributeType: S
