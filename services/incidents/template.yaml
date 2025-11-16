@@ -24,13 +24,10 @@ Resources:
     Properties:
       Name: AlertaUTEC-Incidents-API
       StageName: prod
-      Auth:
-        DefaultAuthorizer: LambdaTokenAuthorizer
-        Authorizers:
-          LambdaTokenAuthorizer:
-            FunctionArn: !Ref AuthorizerFunction
-            Identity:
-              Header: Authorization
+      Cors:
+        AllowMethods: "'GET,POST,PATCH,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
 
   CreateIncidentFunction:
     Type: AWS::Serverless::Function
@@ -48,6 +45,8 @@ Resources:
             Path: /incidents
             Method: post
             RestApiId: !Ref IncidentsApi
+            Auth:
+              Authorizer: NONE
 
   UpdateIncidentFunction:
     Type: AWS::Serverless::Function
@@ -65,6 +64,8 @@ Resources:
             Path: /incidents/{id}
             Method: patch
             RestApiId: !Ref IncidentsApi
+            Auth:
+              Authorizer: NONE
 
   ListIncidentsFunction:
     Type: AWS::Serverless::Function
@@ -82,17 +83,8 @@ Resources:
             Path: /incidents
             Method: get
             RestApiId: !Ref IncidentsApi
-
-  # Authorizer Lambda (JWT real)
-  AuthorizerFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/
-      Handler: authorizer.authorizer_handler
-      Role: !Ref LabRoleArn
-      Environment:
-        Variables:
-          JWT_SECRET_ARN: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:AlertaUTEC/JWTSecret'
+            Auth:
+              Authorizer: NONE
 
 Outputs:
   ApiUrl:
