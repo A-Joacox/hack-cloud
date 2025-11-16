@@ -24,13 +24,15 @@ _service = AuthService(
 
 def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     logger.info(f"Incoming event: {json.dumps(event)}")
-    method = event.get("requestContext", {}).get("http", {}).get("method", "")
-    raw_path = event.get("rawPath") or event.get("resource")
+    
+    # Soportar ambos formatos: HTTP API y REST API
+    method = event.get("httpMethod") or event.get("requestContext", {}).get("http", {}).get("method", "")
+    raw_path = event.get("resource") or event.get("rawPath") or event.get("path", "")
     body = event.get("body") or "{}"
 
-    if method == "POST" and raw_path == "/auth/register":
+    if method == "POST" and raw_path in ["/auth/register", "/dev/auth/register"]:
         return _handle_request(body, _service.register, RegisterRequest)
-    if method == "POST" and raw_path == "/auth/login":
+    if method == "POST" and raw_path in ["/auth/login", "/dev/auth/login"]:
         return _handle_request(body, _service.login, LoginRequest)
 
     return _response(404, {"message": "Route not found"})
