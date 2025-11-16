@@ -1,0 +1,210 @@
+service: alerta-utec
+
+provider:
+  name: aws
+  runtime: python3.12
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1
+  
+  # Para AWS Academy - usar LabRole existente
+  iam:
+    role: arn:aws:iam::527785891672:role/LabRole
+  
+  # Configuración para API Gateway
+  apiGateway:
+    shouldStartNameWithService: true
+  
+  environment:
+    USERS_TABLE: AlertaUTEC-Users
+    INCIDENTS_TABLE: AlertaUTEC-Incidents
+    CONNECTIONS_TABLE: AlertaUTEC-Connections
+    JWT_SECRET_NAME: AlertaUTEC/JWTSecret
+    SNS_TOPIC_ARN: !Ref IncidentAlertsTopic
+    ACCESS_TOKEN_TTL: 900
+    REFRESH_TOKEN_TTL: 43200
+
+functions:
+  # ==================== AUTH ====================
+  authHandler:
+    handler: services/auth/src/auth_service/app.lambda_handler
+    events:
+      - http:
+          path: /auth/register
+          method: post
+          cors: true
+      - http:
+          path: /auth/login
+          method: post
+          cors: true
+  
+  authAuthorizer:
+    handler: services/auth/src/auth_service/app.authorizer_handler
+  
+  # ==================== INCIDENTS ====================
+  createIncident:
+    handler: services/incidents/src/handlers.create_incident
+    events:
+      - http:
+          path: /incidents
+          method: post
+          cors: true
+          authorizer:
+            name: authAuthorizer
+            type: token
+            identitySource: method.request.header.Authorization
+  
+  updateIncident:
+    handler: services/incidents/src/handlers.update_incident
+    events:
+      - http:
+          path: /incidents/{id}
+          method: patch
+          cors: true
+          authorizer:
+            name: authAuthorizer
+            type: token
+            identitySource: method.request.header.Authorization
+  
+  listIncidents:
+    handler: services/incidents/src/handlers.list_incidents
+    events:
+      - http:
+          path: /incidents
+          method: get
+          cors: true
+          authorizer:
+            name: authAuthorizer
+            type: token
+            identitySource: method.request.header.Authorization
+  
+  # ==================== WEBSOCKET ====================
+  wsConnect:
+    handler: services/realtime/src/connection_manager.on_connect
+    events:
+      - websocket:
+          route: $connect
+  
+  wsDisconnect:
+    handler: services/realtime/src/connection_manager.on_disconnect
+    events:
+      - websocket:
+          route: $disconnect
+  
+  # ==================== STREAMS CONSUMERS ====================
+  broadcaster:
+    handler: services/realtime/src/broadcaster.handler
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::GetAtt: [IncidentsTable, StreamArn]
+          batchSize: 10
+          startingPosition: LATEST
+  
+  notifier:
+    handler: services/realtime/src/notifier.handler
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::GetAtt: [IncidentsTable, StreamArn]
+          batchSize: 10
+          startingPosition: LATEST
+
+resources:
+  Resources:
+    # ==================== DYNAMODB TABLES ====================
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.USERS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: EmailIndex
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+    
+    IncidentsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.INCIDENTS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+        AttributeDefinitions:
+          - AttributeName: incidentId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: incidentId
+            KeyType: HASH
+    
+    ConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CONNECTIONS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: connectionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connectionId
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+    
+    # ==================== SECRETS MANAGER ====================
+    JWTSecret:
+      Type: AWS::SecretsManager::Secret
+      Properties:
+        Name: ${self:provider.environment.JWT_SECRET_NAME}
+        Description: JWT signing key for AlertaUTEC
+        GenerateSecretString:
+          SecretStringTemplate: '{}'
+          GenerateStringKey: jwt_secret_key
+          PasswordLength: 64
+          ExcludeCharacters: '"@/\\'
+    
+    # ==================== SNS TOPIC ====================
+    IncidentAlertsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        DisplayName: AlertaUTEC Incident Alerts
+        TopicName: ${self:service}-incident-alerts-${self:provider.stage}
+  
+  Outputs:
+    RestApiUrl:
+      Description: REST API URL
+      Value:
+        Fn::Sub: "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${self:provider.stage}"
+    
+    WebSocketUrl:
+      Description: WebSocket API URL
+      Value:
+        Fn::Sub: "wss://${WebsocketsApi}.execute-api.${AWS::Region}.amazonaws.com/${self:provider.stage}"
+    
+    SNSTopicArn:
+      Description: SNS Topic ARN for notifications
+      Value:
+        Ref: IncidentAlertsTopic
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
+    slim: true
+    strip: false
+    layer: false

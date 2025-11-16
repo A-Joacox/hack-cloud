@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AlertaUTEC - Backend de Incidentes
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 15
+    MemorySize: 256
+
+Parameters:
+  LabRoleArn:
+    Type: String
+    Default: 'arn:aws:iam::527785891672:role/LabRole'
+    Description: ARN del LabRole para AWS Academy
+  IncidentsTableName:
+    Type: String
+    Default: 'AlertaUTEC-Incidents'
+    Description: Nombre de la tabla DynamoDB de incidentes
+
+Resources:
+  IncidentsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: AlertaUTEC-Incidents-API
+      StageName: prod
+      Auth:
+        DefaultAuthorizer: LambdaTokenAuthorizer
+        Authorizers:
+          LambdaTokenAuthorizer:
+            FunctionArn: !Ref AuthorizerFunction
+            Identity:
+              Header: Authorization
+
+  CreateIncidentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handlers.create_incident
+      Role: !Ref LabRoleArn
+      Environment:
+        Variables:
+          INCIDENTS_TABLE: !Ref IncidentsTableName
+      Events:
+        CreateIncident:
+          Type: Api
+          Properties:
+            Path: /incidents
+            Method: post
+            RestApiId: !Ref IncidentsApi
+
+  UpdateIncidentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handlers.update_incident
+      Role: !Ref LabRoleArn
+      Environment:
+        Variables:
+          INCIDENTS_TABLE: !Ref IncidentsTableName
+      Events:
+        UpdateIncident:
+          Type: Api
+          Properties:
+            Path: /incidents/{id}
+            Method: patch
+            RestApiId: !Ref IncidentsApi
+
+  ListIncidentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handlers.list_incidents
+      Role: !Ref LabRoleArn
+      Environment:
+        Variables:
+          INCIDENTS_TABLE: !Ref IncidentsTableName
+      Events:
+        ListIncidents:
+          Type: Api
+          Properties:
+            Path: /incidents
+            Method: get
+            RestApiId: !Ref IncidentsApi
+
+  # Authorizer Lambda (JWT real)
+  AuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: authorizer.authorizer_handler
+      Role: !Ref LabRoleArn
+      Environment:
+        Variables:
+          JWT_SECRET_ARN: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:AlertaUTEC/JWTSecret'
+
+Outputs:
+  ApiUrl:
+    Description: URL base de la API REST de incidentes
+    Value: !Sub "https://${IncidentsApi}.execute-api.${AWS::Region}.amazonaws.com/prod"

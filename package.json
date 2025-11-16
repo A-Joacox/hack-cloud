@@ -1,0 +1,15 @@
+{
+  "name": "alerta-utec",
+  "version": "1.0.0",
+  "description": "AlertaUTEC - Sistema de gestión de incidentes serverless",
+  "scripts": {
+    "deploy": "serverless deploy",
+    "deploy:prod": "serverless deploy --stage prod",
+    "remove": "serverless remove",
+    "logs": "serverless logs -f createIncident -t"
+  },
+  "devDependencies": {
+    "serverless": "^3.38.0",
+    "serverless-python-requirements": "^6.1.0"
+  }
+}
