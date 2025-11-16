@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AlertaUTEC - Servicio de Autenticación
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        USERS_TABLE: AlertaUTEC-Users
+        JWT_SECRET_NAME: AlertaUTEC/JWTSecret
+        ACCESS_TOKEN_TTL: 900
+        REFRESH_TOKEN_TTL: 43200
+
+Resources:
+  # ==================== DYNAMODB ====================
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AlertaUTEC-Users
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  # ==================== SECRETS MANAGER ====================
+  JWTSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: AlertaUTEC/JWTSecret
+      Description: JWT signing key para AlertaUTEC
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: jwt_secret_key
+        PasswordLength: 64
+        ExcludeCharacters: '"@/\'
+
+  # ==================== LAMBDA FUNCTIONS ====================
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AlertaUTEC-AuthHandler
+      CodeUri: src/
+      Handler: auth_service.app.lambda_handler
+      Role: arn:aws:iam::527785891672:role/LabRole
+      Events:
+        Register:
+          Type: Api
+          Properties:
+            Path: /auth/register
+            Method: post
+            RestApiId: !Ref AuthApi
+        Login:
+          Type: Api
+          Properties:
+            Path: /auth/login
+            Method: post
+            RestApiId: !Ref AuthApi
+
+  AuthAuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AlertaUTEC-AuthAuthorizer
+      CodeUri: src/
+      Handler: auth_service.app.authorizer_handler
+      Role: arn:aws:iam::527785891672:role/LabRole
+
+  # ==================== API GATEWAY ====================
+  AuthApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: AlertaUTEC-AuthAPI
+      StageName: dev
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+Outputs:
+  AuthApiUrl:
+    Description: URL de la API de autenticación
+    Value: !Sub "https://${AuthApi}.execute-api.${AWS::Region}.amazonaws.com/dev"
+    Export:
+      Name: AlertaUTEC-AuthApiUrl
+
+  AuthAuthorizerArn:
+    Description: ARN del Lambda Authorizer
+    Value: !GetAtt AuthAuthorizerFunction.Arn
+    Export:
+      Name: AlertaUTEC-AuthAuthorizerArn
+
+  UsersTableName:
+    Description: Nombre de la tabla de usuarios
+    Value: !Ref UsersTable
+    Export:
+      Name: AlertaUTEC-UsersTableName
+
+  JWTSecretArn:
+    Description: ARN del secret de JWT
+    Value: !Ref JWTSecret
+    Export:
+      Name: AlertaUTEC-JWTSecretArn
