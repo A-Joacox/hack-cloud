@@ -24,9 +24,9 @@ class User:
     last_login_at: str | None = None
 
     def to_item(self) -> dict[str, str]:
-        import ulid
+        from ulid import ULID
         if not self.user_id:
-            self.user_id = f"usr_{ulid.new()}"
+            self.user_id = f"usr_{str(ULID())}"
         
         return {
             "userId": self.user_id,
