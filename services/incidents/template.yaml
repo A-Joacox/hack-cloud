@@ -19,6 +19,22 @@ Parameters:
     Description: Nombre de la tabla DynamoDB de incidentes
 
 Resources:
+  # ==================== DYNAMODB TABLE ====================
+  IncidentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref IncidentsTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: incidentId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: incidentId
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  # ==================== API GATEWAY ====================
   IncidentsApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -84,3 +100,9 @@ Outputs:
   ApiUrl:
     Description: URL base de la API REST de incidentes
     Value: !Sub "https://${IncidentsApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+  
+  IncidentsTableStreamArn:
+    Description: ARN del DynamoDB Stream de la tabla Incidents
+    Value: !GetAtt IncidentsTable.StreamArn
+    Export:
+      Name: AlertaUTEC-IncidentsStreamArn
