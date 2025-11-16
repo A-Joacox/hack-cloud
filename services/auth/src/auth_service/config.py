@@ -15,11 +15,11 @@ class Settings:
     @staticmethod
     def from_env() -> "Settings":
         return Settings(
-            users_table_name=os.environ["USERS_TABLE_NAME"],
+            users_table_name=os.environ.get("USERS_TABLE_NAME") or os.environ.get("USERS_TABLE", "AlertaUTEC-Users"),
             access_token_ttl=int(os.environ.get("ACCESS_TOKEN_TTL", "900")),
             refresh_token_ttl=int(os.environ.get("REFRESH_TOKEN_TTL", "43200")),
             jwt_secret_value=os.environ.get("JWT_SECRET_VALUE"),
-            jwt_secret_arn=os.environ.get("JWT_SECRET_ARN"),
+            jwt_secret_arn=os.environ.get("JWT_SECRET_ARN") or os.environ.get("JWT_SECRET_NAME"),
         )
 
 
