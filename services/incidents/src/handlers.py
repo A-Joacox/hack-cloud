@@ -22,11 +22,23 @@ import json
 import boto3
 import uuid
 import time
+from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 
 ddb = boto3.resource('dynamodb')
 TABLE = os.environ.get('INCIDENTS_TABLE', 'AlertaUTEC-Incidents')
 table = ddb.Table(TABLE)
+
+# Utilidad para convertir Decimals de DynamoDB a tipos JSON serializables
+def decimal_to_number(obj):
+    """Convierte objetos Decimal a int o float recursivamente"""
+    if isinstance(obj, list):
+        return [decimal_to_number(i) for i in obj]
+    elif isinstance(obj, dict):
+        return {k: decimal_to_number(v) for k, v in obj.items()}
+    elif isinstance(obj, Decimal):
+        return int(obj) if obj % 1 == 0 else float(obj)
+    return obj
 
 # Utilidad para extraer claims del contexto de API Gateway
 
@@ -88,7 +100,7 @@ def create_incident(event, context):
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps(item)
+            'body': json.dumps(decimal_to_number(item))
         }
     except Exception as e:
         print(f'Error creating incident: {e}')
@@ -152,7 +164,7 @@ def update_incident(event, context):
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps(resp['Attributes'])
+            'body': json.dumps(decimal_to_number(resp['Attributes']))
         }
     except KeyError:
         return {
@@ -181,6 +193,9 @@ def list_incidents(event, context):
         
         resp = table.scan(**scan_kwargs)
         items = resp.get('Items', [])
+        
+        # Convertir Decimals a números normales
+        items = decimal_to_number(items)
         
         # Ordenar por createdAt descendente
         items.sort(key=lambda x: x.get('createdAt', 0), reverse=True)
