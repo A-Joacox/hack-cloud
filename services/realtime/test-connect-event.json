@@ -1,0 +1,11 @@
+{
+  "requestContext": {
+    "connectionId": "test-connection-123",
+    "routeKey": "$connect",
+    "eventType": "CONNECT"
+  },
+  "queryStringParameters": {
+    "sub": "demo-user",
+    "role": "student"
+  }
+}
