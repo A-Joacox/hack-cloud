@@ -17,15 +17,19 @@ class User:
     full_name: str
     role: Role
     password_hash: str
+    user_id: str | None = None
     status: Literal["active", "disabled"] = "active"
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
     last_login_at: str | None = None
 
     def to_item(self) -> dict[str, str]:
+        import ulid
+        if not self.user_id:
+            self.user_id = f"usr_{ulid.new()}"
+        
         return {
-            "pk": f"USER#{self.email.lower()}",
-            "sk": "PROFILE",
+            "userId": self.user_id,
             "email": self.email.lower(),
             "fullName": self.full_name,
             "role": self.role,
@@ -39,6 +43,7 @@ class User:
     @staticmethod
     def from_item(item: dict[str, str]) -> "User":
         return User(
+            user_id=item.get("userId"),
             email=item["email"],
             full_name=item["fullName"],
             role=item["role"],
