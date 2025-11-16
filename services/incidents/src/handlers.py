@@ -64,13 +64,13 @@ def create_incident(event, context):
                 'body': json.dumps({'error': 'ubicacion es requerida'})
             }
         
-        incident_id = body.get('id') or str(uuid.uuid4())
+        incident_id = body.get('incidentId') or f"inc_{str(uuid.uuid4())[:8]}"
         now = int(time.time())
         
         item = {
-            'id': incident_id,
-            'status': body.get('status', 'pending'),
-            'urgencia': body.get('urgencia', 'baja'),
+            'incidentId': incident_id,
+            'status': body.get('status', 'open'),
+            'urgencia': body.get('urgencia', 'medium'),
             'ubicacion': body.get('ubicacion'),
             'titulo': body.get('titulo'),
             'descripcion': body.get('descripcion', ''),
@@ -135,7 +135,7 @@ def update_incident(event, context):
         expr_attr[':updatedAt'] = int(time.time())
         
         update_kwargs = {
-            'Key': {'id': incident_id},
+            'Key': {'incidentId': incident_id},
             'UpdateExpression': 'SET ' + ', '.join(update_expr),
             'ExpressionAttributeValues': expr_attr,
             'ReturnValues': 'ALL_NEW'
