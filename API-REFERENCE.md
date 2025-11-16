@@ -243,6 +243,99 @@ curl -X PUT https://wkcu4ednm9.execute-api.us-east-1.amazonaws.com/prod/incident
 
 ---
 
+### **POST /incidents/{incidentId}/comments**
+Agregar un comentario a un incidente.
+
+**Request:**
+```json
+{
+  "comment": "El incendio fue controlado, todo está seguro ahora",
+  "userId": "user_123",
+  "userName": "Juan Pérez"
+}
+```
+
+**Campos:**
+- `comment` (string, required): Texto del comentario (máx 1000 caracteres)
+- `userId` (string, optional): ID del usuario que comenta (default: "anon")
+- `userName` (string, optional): Nombre del usuario (default: "Anónimo")
+
+**Response (201 Created):**
+```json
+{
+  "commentId": "comment_01jd...",
+  "incidentId": "inc_8c2f606e",
+  "userId": "user_123",
+  "userName": "Juan Pérez",
+  "comment": "El incendio fue controlado, todo está seguro ahora",
+  "createdAt": 1763285500
+}
+```
+
+**Ejemplo curl:**
+```bash
+curl -X POST https://wkcu4ednm9.execute-api.us-east-1.amazonaws.com/prod/incidents/inc_8c2f606e/comments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "comment": "Situación controlada",
+    "userId": "authority_01",
+    "userName": "Oficial de Seguridad"
+  }'
+```
+
+---
+
+### **GET /incidents/{incidentId}/comments**
+Obtener todos los comentarios de un incidente.
+
+**Response (200 OK):**
+```json
+{
+  "incidentId": "inc_8c2f606e",
+  "comments": [
+    {
+      "commentId": "comment_01jd...",
+      "userId": "authority_01",
+      "userName": "Oficial de Seguridad",
+      "comment": "Situación controlada",
+      "createdAt": 1763285500
+    },
+    {
+      "commentId": "comment_01jc...",
+      "userId": "user_123",
+      "userName": "Juan Pérez",
+      "comment": "Gracias por la rápida respuesta",
+      "createdAt": 1763285350
+    }
+  ],
+  "count": 2
+}
+```
+
+**Ejemplo curl:**
+```bash
+curl https://wkcu4ednm9.execute-api.us-east-1.amazonaws.com/prod/incidents/inc_8c2f606e/comments
+```
+
+---
+
+### **DELETE /incidents/{incidentId}/comments/{commentId}**
+Eliminar un comentario específico.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Comentario eliminado exitosamente"
+}
+```
+
+**Ejemplo curl:**
+```bash
+curl -X DELETE https://wkcu4ednm9.execute-api.us-east-1.amazonaws.com/prod/incidents/inc_8c2f606e/comments/comment_01jd...
+```
+
+---
+
 ## 🔌 **WebSocket Service (Real-time)**
 
 **WebSocket URL:** `wss://b9ius2s0e1.execute-api.us-east-1.amazonaws.com/prod`

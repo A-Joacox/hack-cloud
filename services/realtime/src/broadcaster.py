@@ -19,11 +19,13 @@ def build_payload(event_type, new_img, old_img):
         inc = _ddeserialize(new_img)
         return {
             'type': 'IncidentCreated',
-            'id': inc.get('id'),
+            'incidentId': inc.get('incidentId'),
             'status': inc.get('status'),
             'urgencia': inc.get('urgencia'),
             'ubicacion': inc.get('ubicacion'),
             'titulo': inc.get('titulo'),
+            'descripcion': inc.get('descripcion'),
+            'createdAt': inc.get('createdAt'),
         }
     if event_type == 'MODIFY':
         new = _ddeserialize(new_img)
@@ -32,9 +34,10 @@ def build_payload(event_type, new_img, old_img):
             return None
         return {
             'type': 'IncidentStatusChanged',
-            'id': new.get('id'),
+            'incidentId': new.get('incidentId'),
             'status': new.get('status'),
             'urgencia': new.get('urgencia'),
+            'updatedAt': new.get('updatedAt'),
         }
     return None
 

@@ -96,6 +96,58 @@ Resources:
             Method: get
             RestApiId: !Ref IncidentsApi
 
+  # ==================== COMMENTS FUNCTIONS ====================
+  CreateCommentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: comments.create_comment
+      Role: !Ref LabRoleArn
+      Environment:
+        Variables:
+          INCIDENTS_TABLE: !Ref IncidentsTableName
+      Events:
+        CreateComment:
+          Type: Api
+          Properties:
+            Path: /incidents/{incidentId}/comments
+            Method: post
+            RestApiId: !Ref IncidentsApi
+
+  ListCommentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: comments.list_comments
+      Role: !Ref LabRoleArn
+      Environment:
+        Variables:
+          INCIDENTS_TABLE: !Ref IncidentsTableName
+      Events:
+        ListComments:
+          Type: Api
+          Properties:
+            Path: /incidents/{incidentId}/comments
+            Method: get
+            RestApiId: !Ref IncidentsApi
+
+  DeleteCommentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: comments.delete_comment
+      Role: !Ref LabRoleArn
+      Environment:
+        Variables:
+          INCIDENTS_TABLE: !Ref IncidentsTableName
+      Events:
+        DeleteComment:
+          Type: Api
+          Properties:
+            Path: /incidents/{incidentId}/comments/{commentId}
+            Method: delete
+            RestApiId: !Ref IncidentsApi
+
 Outputs:
   ApiUrl:
     Description: URL base de la API REST de incidentes
