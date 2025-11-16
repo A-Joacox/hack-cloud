@@ -199,9 +199,6 @@ resources:
       Value:
         Ref: IncidentAlertsTopic
 
-plugins:
-  - serverless-python-requirements
-
 custom:
   pythonRequirements:
     dockerizePip: true
