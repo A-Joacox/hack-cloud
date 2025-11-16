@@ -75,7 +75,7 @@ Resources:
         UpdateIncident:
           Type: Api
           Properties:
-            Path: /incidents/{id}
+            Path: /incidents/{incidentId}
             Method: patch
             RestApiId: !Ref IncidentsApi
 

@@ -102,7 +102,7 @@ def create_incident(event, context):
 
 def update_incident(event, context):
     try:
-        incident_id = event['pathParameters']['id']
+        incident_id = event['pathParameters']['incidentId']
         body = json.loads(event.get('body', '{}'))
         claims = get_claims(event)
         
