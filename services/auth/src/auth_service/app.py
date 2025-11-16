@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Callable
-
-from aws_lambda_powertools import Logger
 
 from .config import settings
 from .domain.auth_service import AuthService
@@ -11,7 +10,9 @@ from .domain.schemas import LoginRequest, RegisterRequest
 from .repositories.dynamo import DynamoUserRepository
 from .utils import jwt_utils
 
-logger = Logger(service="auth-service")
+# Setup logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 _repo = DynamoUserRepository(settings.users_table_name)
 _service = AuthService(
@@ -22,7 +23,7 @@ _service = AuthService(
 
 
 def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
-    logger.debug("Incoming event", extra={"event": event})
+    logger.info(f"Incoming event: {json.dumps(event)}")
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
     raw_path = event.get("rawPath") or event.get("resource")
     body = event.get("body") or "{}"
@@ -43,7 +44,7 @@ def authorizer_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     try:
         claims = jwt_utils.verify_token(token)
     except Exception as err:  # pylint: disable=broad-except
-        logger.warning("Invalid token", extra={"error": str(err)})
+        logger.warning(f"Invalid token: {str(err)}")
         raise Exception("Unauthorized") from err
 
     return {
@@ -63,7 +64,7 @@ def _handle_request(body: str, handler: Callable[[Any], Any], model_cls):
         result = handler(payload)
         return _response(200, json.loads(result.model_dump_json()))
     except ValueError as err:
-        logger.warning("Validation error", extra={"error": str(err)})
+        logger.warning(f"Validation error: {str(err)}")
         return _response(400, {"message": str(err)})
     except Exception as err:  # pylint: disable=broad-except
         logger.exception("Unhandled error")
